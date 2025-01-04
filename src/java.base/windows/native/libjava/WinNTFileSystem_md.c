@@ -719,10 +719,17 @@ Java_java_io_WinNTFileSystem_list0(JNIEnv *env, jobject this, jobject file)
         return NULL;
     }
 
-    /* Remove trailing space chars from directory name */
+    /* Remove trailing space chars from directory name
+     * unless the \\?\ notation is used
+     */
     len = (int)wcslen(search_path);
-    while (search_path[len-1] == L' ') {
-        len--;
+    if (!(len > 4 && search_path[0] == L'\\'
+        && search_path[1] == L'\\'
+        && search_path[2] == L'?'
+        && search_path[3] == L'\\')) {
+        while (search_path[len-1] == L' ') {
+            len--;
+        }
     }
     search_path[len] = 0;
 
