@@ -1,0 +1,115 @@
+name: Build trimmed-down JRE images
+on:
+  push:
+    branches:
+      - aer0ss
+    tags:
+      - 'aer0ss-*'
+
+jobs:
+
+  # TODO: use VM/docker to support older ubuntu?
+  # TODO: use docker/qemu to support arm64?
+  linux-amd64:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '23'
+      - name: install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --only-upgrade apt
+          sudo apt-get install libxrandr-dev libxtst-dev libcups2-dev libasound2-dev
+      - run: ./build-jre.sh linux-amd64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jre-linux-amd64
+          path: jre-linux-amd64.tar.gz
+
+
+  windows-amd64:
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '23'
+      - uses: cygwin/cygwin-install-action@master
+        with:
+          packages: autoconf tar unzip zip make
+      - shell: bash
+        run: ./build-jre.sh windows-amd64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jre-windows-amd64
+          path: jre-windows-amd64.tar.gz
+
+# TODO: arm64 windows build somehow?
+
+
+  macos-amd64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '23'
+      - name: install deps
+        run: |
+          brew install autoconf make coreutils
+      - name: build JRE
+        run: |
+          export MACOSX_DEPLOYMENT_TARGET=11.00
+          ./build-jre.sh macos-amd64 --with-macosx-version-max=11.00.00
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jre-macos-amd64
+          path: jre-macos-amd64.tar.gz
+
+  macos-arm64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '23'
+      - name: install deps
+        run: |
+          brew install autoconf make coreutils
+      - name: build JRE
+        run: |
+          export MACOSX_DEPLOYMENT_TARGET=11.00
+          ./build-jre.sh macos-arm64 --with-macosx-version-max=11.00.00
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jre-macos-arm64
+          path: jre-macos-arm64.tar.gz
+
+
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
+    needs: [linux-amd64, windows-amd64, macos-amd64, macos-arm64]
+    permissions:
+      # Use to sign the release artifacts
+      id-token: write
+      # Used to upload release artifacts
+      contents: write
+      # Used to generate artifact attestation
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            jre-*.tar.gz
+
